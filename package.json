@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env server/index.ts",
+    "dev": "node --watch --use-env-proxy --env-file-if-exists=.env server/index.ts",
     "build": "esbuild src/main.tsx --bundle --minify --outfile=dist/chat.js",
-    "start": "node --env-file-if-exists=.env server/index.ts",
+    "start": "node --use-env-proxy --env-file-if-exists=.env server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test server/*.test.ts",
     "fmt": "oxfmt --write .",
