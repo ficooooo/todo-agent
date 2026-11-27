@@ -82,6 +82,51 @@ test("更新已有 JSON 清单时保留其他任务和扩展字段", async (t) =
   assert.deepEqual(createJsonTaskStore(filename).list(), [{ ...first, done: true }, second]);
 });
 
+test("任务 API 支持截止日期、优先级、工作量、子任务及级联删除", async (t) => {
+  const { request } = await startTestApp(t);
+  assert.equal(
+    (await request("POST", "/api/tasks", { title: "交周报", dueDate: "2026-02-30" })).status,
+    400,
+  );
+
+  const parent = await request("POST", "/api/tasks", {
+    title: "准备搬家",
+    dueDate: "2026-11-30",
+    priority: "high",
+    effort: "large",
+  });
+  assert.equal(parent.status, 201);
+  assert.equal(parent.body.priority, "high");
+  assert.equal(parent.body.effort, "large");
+
+  const child = await request("POST", "/api/tasks", {
+    title: "买纸箱",
+    parentId: parent.body.id,
+    effort: "small",
+  });
+  assert.equal(child.status, 201);
+  assert.equal(child.body.parentId, parent.body.id);
+
+  // 拒绝在子任务下继续嵌套第三层或挂载到不存在的父任务。
+  assert.equal(
+    (await request("POST", "/api/tasks", { title: "透明胶带", parentId: child.body.id })).status,
+    400,
+  );
+  assert.equal(
+    (await request("POST", "/api/tasks", { title: "孤儿任务", parentId: "missing" })).status,
+    400,
+  );
+
+  // 传 null 清空可选扩展字段时直接移除对应键。
+  const cleared = await request("PATCH", `/api/tasks/${parent.body.id}`, { dueDate: null });
+  assert.equal(cleared.status, 200);
+  assert.equal("dueDate" in cleared.body, false);
+
+  // 删除父任务时级联清理子任务。
+  assert.equal((await request("DELETE", `/api/tasks/${parent.body.id}`)).status, 204);
+  assert.deepEqual((await request("GET", "/api/tasks")).body, []);
+});
+
 test("聊天 API 只将有效的完整对话传给智能体，并返回其回复", async (t) => {
   const { request, conversations } = await startTestApp(t);
   const messages = [
